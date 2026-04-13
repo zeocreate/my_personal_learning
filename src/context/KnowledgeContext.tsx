@@ -80,28 +80,54 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  const runMutation = useCallback(async (mutation: () => Promise<unknown>) => {
+    try {
+      await mutation();
+    } catch (error) {
+      console.error('MySQL mutation failed:', error);
+    } finally {
+      await syncFromServer().catch((syncError) => {
+        console.error('Post-mutation sync failed:', syncError);
+      });
+    }
+  }, [syncFromServer]);
+
   useEffect(() => {
     void syncFromServer().catch((error) => {
       console.error('Failed to load from MySQL API:', error);
     });
 
+    const intervalId = window.setInterval(() => {
+      void syncFromServer().catch((error) => {
+        console.error('Periodic sync failed:', error);
+      });
+    }, 4000);
+
     localStorage.removeItem('knowledge-hub');
     localStorage.removeItem('knowledge-hub-v2');
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
   }, [syncFromServer]);
 
   const addCategory = useCallback((name: string, icon: string, color: string) => {
     const cat: Category = { id: genId(), name, icon, color, createdAt: now(), updatedAt: now() };
     setState(s => ({ ...s, categories: [...s.categories, cat] }));
-    void api.createCategory(cat).catch(() => void syncFromServer());
+    void runMutation(() => api.createCategory(cat));
     return cat;
-  }, [syncFromServer]);
+  }, [runMutation]);
 
   const updateCategory = useCallback((id: string, updates: Partial<Category>) => {
+    let payload: Category | null = null;
     setState(s => ({ ...s, categories: s.categories.map(c => c.id === id ? { ...c, ...updates, updatedAt: now() } : c) }));
     const current = state.categories.find((c) => c.id === id);
-    if (!current) return;
-    void api.updateCategory(id, { ...current, ...updates }).catch(() => void syncFromServer());
-  }, [state.categories, syncFromServer]);
+    if (current) {
+      payload = { ...current, ...updates };
+    }
+    if (!payload) return;
+    void runMutation(() => api.updateCategory(id, payload));
+  }, [state.categories, runMutation]);
 
   const deleteCategory = useCallback((id: string) => {
     setState(s => ({
@@ -110,22 +136,26 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
       topics: s.topics.filter(t => t.categoryId !== id),
       notes: s.notes.filter(n => n.categoryId !== id),
     }));
-    void api.deleteCategory(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.deleteCategory(id));
+  }, [runMutation]);
 
   const addTopic = useCallback((categoryId: string, name: string, description: string) => {
     const topic: Topic = { id: genId(), categoryId, name, description, createdAt: now(), updatedAt: now() };
     setState(s => ({ ...s, topics: [...s.topics, topic] }));
-    void api.createTopic(topic).catch(() => void syncFromServer());
+    void runMutation(() => api.createTopic(topic));
     return topic;
-  }, [syncFromServer]);
+  }, [runMutation]);
 
   const updateTopic = useCallback((id: string, updates: Partial<Topic>) => {
+    let payload: Topic | null = null;
     setState(s => ({ ...s, topics: s.topics.map(t => t.id === id ? { ...t, ...updates, updatedAt: now() } : t) }));
     const current = state.topics.find((t) => t.id === id);
-    if (!current) return;
-    void api.updateTopic(id, { ...current, ...updates }).catch(() => void syncFromServer());
-  }, [state.topics, syncFromServer]);
+    if (current) {
+      payload = { ...current, ...updates };
+    }
+    if (!payload) return;
+    void runMutation(() => api.updateTopic(id, payload));
+  }, [state.topics, runMutation]);
 
   const deleteTopic = useCallback((id: string) => {
     setState(s => ({
@@ -133,8 +163,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
       topics: s.topics.filter(t => t.id !== id),
       notes: s.notes.filter(n => n.topicId !== id),
     }));
-    void api.deleteTopic(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.deleteTopic(id));
+  }, [runMutation]);
 
   const addNote = useCallback((topicId: string, categoryId: string, title: string) => {
     const note: Note = {
@@ -144,45 +174,49 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
       createdAt: now(), updatedAt: now(), lastViewedAt: now(),
     };
     setState(s => ({ ...s, notes: [...s.notes, note] }));
-    void api.createNote(note).catch(() => void syncFromServer());
+    void runMutation(() => api.createNote(note));
     return note;
-  }, [syncFromServer]);
+  }, [runMutation]);
 
   const updateNote = useCallback((id: string, updates: Partial<Note>) => {
+    let payload: Note | null = null;
     setState(s => ({ ...s, notes: s.notes.map(n => n.id === id ? { ...n, ...updates, updatedAt: now() } : n) }));
     const current = state.notes.find((n) => n.id === id);
-    if (!current) return;
-    void api.updateNote(id, { ...current, ...updates }).catch(() => void syncFromServer());
-  }, [state.notes, syncFromServer]);
+    if (current) {
+      payload = { ...current, ...updates };
+    }
+    if (!payload) return;
+    void runMutation(() => api.updateNote(id, payload));
+  }, [state.notes, runMutation]);
 
   const deleteNote = useCallback((id: string) => {
     setState(s => ({ ...s, notes: s.notes.filter(n => n.id !== id) }));
-    void api.deleteNote(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.deleteNote(id));
+  }, [runMutation]);
 
   const toggleFavorite = useCallback((id: string) => {
     setState(s => ({ ...s, notes: s.notes.map(n => n.id === id ? { ...n, isFavorite: !n.isFavorite, updatedAt: now() } : n) }));
-    void api.toggleFavorite(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.toggleFavorite(id));
+  }, [runMutation]);
 
   const togglePin = useCallback((id: string) => {
     setState(s => ({ ...s, notes: s.notes.map(n => n.id === id ? { ...n, isPinned: !n.isPinned, updatedAt: now() } : n) }));
-    void api.togglePin(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.togglePin(id));
+  }, [runMutation]);
 
   const viewNote = useCallback((id: string) => {
     setState(s => ({ ...s, notes: s.notes.map(n => n.id === id ? { ...n, lastViewedAt: now() } : n) }));
-    void api.viewNote(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.viewNote(id));
+  }, [runMutation]);
 
   const addTag = useCallback((name: string, color: string) => {
     const existing = state.tags.find(t => t.name.toLowerCase() === name.toLowerCase());
     if (existing) return existing;
     const tag: Tag = { id: genId(), name: name.toLowerCase(), color };
     setState(s => ({ ...s, tags: [...s.tags, tag] }));
-    void api.createTag(tag).catch(() => void syncFromServer());
+    void runMutation(() => api.createTag(tag));
     return tag;
-  }, [state.tags, syncFromServer]);
+  }, [state.tags, runMutation]);
 
   const deleteTag = useCallback((id: string) => {
     setState(s => {
@@ -195,8 +229,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
           : s.notes,
       };
     });
-    void api.deleteTag(id).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.deleteTag(id));
+  }, [runMutation]);
 
   const searchNotes = useCallback((query: string) => {
     const q = query.toLowerCase();
@@ -250,9 +284,9 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
       updatedAt: now(),
     };
     setState(s => ({ ...s, learningSessions: [...s.learningSessions, session] }));
-    void api.startLearningSession(session).catch(() => void syncFromServer());
+    void runMutation(() => api.startLearningSession(session));
     return session;
-  }, [syncFromServer]);
+  }, [runMutation]);
 
   const pauseLearningSession = useCallback((sessionId: string) => {
     setState(s => ({
@@ -271,8 +305,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
           : ls
       ),
     }));
-    void api.pauseLearningSession(sessionId).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.pauseLearningSession(sessionId));
+  }, [runMutation]);
 
   const resumeLearningSession = useCallback((sessionId: string) => {
     setState(s => ({
@@ -283,8 +317,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
           : ls
       ),
     }));
-    void api.resumeLearningSession(sessionId).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.resumeLearningSession(sessionId));
+  }, [runMutation]);
 
   const completeLearningSession = useCallback((sessionId: string) => {
     setState(s => ({
@@ -304,8 +338,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
           : ls
       ),
     }));
-    void api.completeLearningSession(sessionId).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.completeLearningSession(sessionId));
+  }, [runMutation]);
 
   const updateLearningProgress = useCallback((sessionId: string, noteId: string, progressPercentage: number) => {
     setState(s => {
@@ -335,8 +369,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
         };
       }
     });
-    void api.updateLearningProgress({ sessionId, noteId, progressPercentage }).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.updateLearningProgress({ sessionId, noteId, progressPercentage }));
+  }, [runMutation]);
 
   const getActiveLearningSession = useCallback(() => {
     return state.learningSessions.find(ls => ls.status === 'active') || null;
@@ -381,8 +415,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
         };
       }
     });
-    void api.upsertTimeTracking({ date, categoryId, minutes }).catch(() => void syncFromServer());
-  }, [syncFromServer]);
+    void runMutation(() => api.upsertTimeTracking({ date, categoryId, minutes }));
+  }, [runMutation]);
 
   return (
     <KnowledgeContext.Provider value={{
