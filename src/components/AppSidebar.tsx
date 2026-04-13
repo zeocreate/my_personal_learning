@@ -1,10 +1,10 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useKnowledge } from '@/context/KnowledgeContext';
-import { LayoutDashboard, FolderOpen, Star, Hash, ChevronRight, Plus, BookOpen, Trash2, User } from 'lucide-react';
+import { LayoutDashboard, FolderOpen, Star, Hash, ChevronRight, Plus, Bot, Trash2, User } from 'lucide-react';
 import { useState } from 'react';
 
 export function AppSidebar() {
-  const { categories, getFavorites, tags, addCategory, deleteCategory } = useKnowledge();
+  const { categories, getFavorites, tags, addCategory, deleteCategory, deleteTag } = useKnowledge();
   const location = useLocation();
   const favorites = getFavorites();
   const [showAddCategory, setShowAddCategory] = useState(false);
@@ -25,9 +25,9 @@ export function AppSidebar() {
       <div className="p-4 border-b border-sidebar-border">
         <Link to="/" className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <BookOpen className="h-4 w-4 text-primary-foreground" />
+            <Bot className="h-4 w-4 text-primary-foreground" />
           </div>
-          <span className="font-semibold text-foreground text-sm tracking-tight">Personal tracker</span>
+          <span className="font-semibold text-foreground text-sm tracking-tight">AI Knowledge Tracker</span>
         </Link>
       </div>
 
@@ -109,14 +109,23 @@ export function AppSidebar() {
             <span className="px-3 text-xs font-medium text-muted-foreground uppercase tracking-wider">Tags</span>
             <div className="flex flex-wrap gap-1.5 px-3 mt-2">
               {tags.map(tag => (
-                <Link
-                  key={tag.id}
-                  to={`/tag/${tag.name}`}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground hover:bg-accent transition-colors"
-                >
-                  <Hash className="h-2.5 w-2.5" />
-                  {tag.name}
-                </Link>
+                <div key={tag.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-secondary text-secondary-foreground hover:bg-accent transition-colors group">
+                  <Link to={`/tag/${tag.name}`} className="inline-flex items-center gap-1">
+                    <Hash className="h-2.5 w-2.5" />
+                    {tag.name}
+                  </Link>
+                  <button
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      deleteTag(tag.id);
+                    }}
+                    className="opacity-70 hover:opacity-100 text-muted-foreground hover:text-destructive"
+                    title={`Delete tag #${tag.name}`}
+                  >
+                    <Trash2 className="h-2.5 w-2.5" />
+                  </button>
+                </div>
               ))}
             </div>
           </div>

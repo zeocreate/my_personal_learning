@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Pause, Play, Square, Timer } from 'lucide-react';
 import { useKnowledge } from '@/context/KnowledgeContext';
 
-const toDateKey = (value = new Date()) => value.toISOString().split('T')[0];
+const toDateKey = (value = new Date()) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export function LearningTrackerControls() {
   const {
@@ -17,6 +22,14 @@ export function LearningTrackerControls() {
 
   const [selectedCategoryId, setSelectedCategoryId] = useState('');
   const [title, setTitle] = useState('Learning Session');
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     if (!selectedCategoryId && categories.length > 0) {
@@ -29,9 +42,17 @@ export function LearningTrackerControls() {
     [learningSessions],
   );
 
-  const elapsedMinutes = currentSession
-    ? Math.max(1, Math.round((Date.now() - new Date(currentSession.startedAt).getTime()) / 60000))
-    : 0;
+  const elapsedMinutes = useMemo(() => {
+    if (!currentSession) return 0;
+    const completedMinutes = currentSession.totalDurationMinutes || 0;
+    if (currentSession.status === 'paused') {
+      return completedMinutes;
+    }
+
+    const segmentMs = Math.max(0, nowMs - new Date(currentSession.startedAt).getTime());
+    const segmentMinutes = Math.floor(segmentMs / 60000);
+    return completedMinutes + segmentMinutes;
+  }, [currentSession, nowMs]);
 
   const handleStart = () => {
     if (!selectedCategoryId || currentSession) return;
@@ -49,7 +70,10 @@ export function LearningTrackerControls() {
 
   const handleClose = () => {
     if (!currentSession) return;
-    updateTimeTracking(toDateKey(), currentSession.categoryId, elapsedMinutes);
+
+    if (elapsedMinutes > 0) {
+      updateTimeTracking(toDateKey(), currentSession.categoryId, elapsedMinutes);
+    }
     completeLearningSession(currentSession.id);
   };
 

@@ -1,3 +1,3 @@
-# Welcome to your Lovable project
+# AI Knowledge Tracker
 
-TODO: Document your project here
+AI-first project for managing notes, topics, tags, and learning time tracking.

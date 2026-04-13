@@ -4,6 +4,12 @@ import { api } from '@/lib/api';
 
 const genId = () => crypto.randomUUID();
 const now = () => new Date().toISOString();
+const toDateKey = (value = new Date()) => {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, '0');
+  const day = String(value.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 interface KnowledgeState {
   categories: Category[];
@@ -179,7 +185,16 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
   }, [state.tags, syncFromServer]);
 
   const deleteTag = useCallback((id: string) => {
-    setState(s => ({ ...s, tags: s.tags.filter(t => t.id !== id) }));
+    setState(s => {
+      const deletedTag = s.tags.find(t => t.id === id);
+      return {
+        ...s,
+        tags: s.tags.filter(t => t.id !== id),
+        notes: deletedTag
+          ? s.notes.map(n => ({ ...n, tags: n.tags.filter(tag => tag !== deletedTag.name) }))
+          : s.notes,
+      };
+    });
     void api.deleteTag(id).catch(() => void syncFromServer());
   }, [syncFromServer]);
 
@@ -243,8 +258,16 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
     setState(s => ({
       ...s,
       learningSessions: s.learningSessions.map(ls => 
-        ls.id === sessionId 
-          ? { ...ls, status: 'paused' as const, pausedAt: now(), updatedAt: now() }
+        ls.id === sessionId
+          ? {
+              ...ls,
+              status: 'paused' as const,
+              pausedAt: now(),
+              totalDurationMinutes:
+                (ls.totalDurationMinutes || 0) +
+                Math.max(0, Math.floor((Date.now() - new Date(ls.startedAt).getTime()) / 60000)),
+              updatedAt: now(),
+            }
           : ls
       ),
     }));
@@ -255,8 +278,8 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
     setState(s => ({
       ...s,
       learningSessions: s.learningSessions.map(ls => 
-        ls.id === sessionId 
-          ? { ...ls, status: 'active' as const, pausedAt: null, updatedAt: now() }
+        ls.id === sessionId
+          ? { ...ls, status: 'active' as const, startedAt: now(), pausedAt: null, updatedAt: now() }
           : ls
       ),
     }));
@@ -267,8 +290,17 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
     setState(s => ({
       ...s,
       learningSessions: s.learningSessions.map(ls => 
-        ls.id === sessionId 
-          ? { ...ls, status: 'completed' as const, completedAt: now(), updatedAt: now() }
+        ls.id === sessionId
+          ? {
+              ...ls,
+              status: 'completed' as const,
+              completedAt: now(),
+              totalDurationMinutes:
+                ls.status === 'active'
+                  ? (ls.totalDurationMinutes || 0) + Math.max(0, Math.floor((Date.now() - new Date(ls.startedAt).getTime()) / 60000))
+                  : (ls.totalDurationMinutes || 0),
+              updatedAt: now(),
+            }
           : ls
       ),
     }));
@@ -311,7 +343,7 @@ export function KnowledgeProvider({ children }: { children: React.ReactNode }) {
   }, [state.learningSessions]);
 
   const getTodayTimeTracking = useCallback(() => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toDateKey();
     return state.timeTracking.find(tt => tt.date === today) || null;
   }, [state.timeTracking]);
 

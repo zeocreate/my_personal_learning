@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Search, X } from 'lucide-react';
 import { useKnowledge } from '@/context/KnowledgeContext';
 import { useDebounce } from '@/hooks/useDebounce';
@@ -8,9 +8,23 @@ import { useNavigate } from 'react-router-dom';
 export function GlobalSearch() {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState(false);
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
   const debouncedQuery = useDebounce(query, 200);
-  const { searchNotes, categories, topics } = useKnowledge();
+  const { searchNotes, categories } = useKnowledge();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const handlePointerDown = (event: MouseEvent) => {
+      if (!wrapperRef.current) return;
+      const target = event.target as Node;
+      if (!wrapperRef.current.contains(target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handlePointerDown);
+    return () => document.removeEventListener('mousedown', handlePointerDown);
+  }, []);
 
   const results = useMemo(() => {
     if (!debouncedQuery.trim()) return [];
@@ -20,7 +34,7 @@ export function GlobalSearch() {
   const getCategoryName = (id: string) => categories.find(c => c.id === id)?.name || '';
 
   return (
-    <div className="relative w-full max-w-md">
+    <div ref={wrapperRef} className="relative w-full max-w-md">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <input
@@ -55,7 +69,6 @@ export function GlobalSearch() {
           </motion.div>
         )}
       </AnimatePresence>
-      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
     </div>
   );
 }
